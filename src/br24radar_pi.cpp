@@ -545,6 +545,8 @@ int br24radar_pi::Init(void)
     SetCanvasContextMenuItemViz(br_guard_zone_id, false);
     br_guard_context_mode = false;
 
+    m_meters = 1000;
+
     //    Create the THREAD for Multicast radar data reception
     m_quit = false;
     m_dataReceiveThread = new RadarDataReceiveThread(this, &m_quit);
@@ -1410,7 +1412,7 @@ bool br24radar_pi::RenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp)
 void br24radar_pi::RenderRadarOverlay(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp)
 {
     glPushAttrib(GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_HINT_BIT);      //Save state
-    if (settings.display_mode == DM_CHART_OVERLAY) {
+    if (settings.display_mode == DM_CHART_OVERLAY || settings.display_mode == DM_EMULATOR) {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
@@ -1439,20 +1441,24 @@ void br24radar_pi::RenderRadarOverlay(wxPoint radar_center, double v_scale_ppm, 
                                 );
     glRotatef(heading, 0, 0, 1);
 
-    // scaling...
-    int meters = br_range_meters;
-    if (!meters) meters = br_auto_range_meters;
-    if (!meters) meters = 1000;
-    double radar_pixels_per_meter = ((double) RETURNS_PER_LINE) / meters;
-    double scale_factor =  v_scale_ppm / radar_pixels_per_meter;  // screen pix/radar pix
-
     if ((br_bpos_set && m_heading_source != HEADING_NONE) || settings.display_mode == DM_EMULATOR) {
-        glPushMatrix();
-        glScaled(scale_factor, scale_factor, 1.);
         if (br_range_meters > 0 && br_scanner_state == RADAR_ON) {
-            DrawRadarImage(meters, radar_center);
+            glPushMatrix();
+
+            // scaling...
+            m_meters = br_range_meters;
+            if (!m_meters) m_meters = br_auto_range_meters;
+            if (!m_meters) m_meters = 1000;
+            double radar_pixels_per_meter = ((double) RETURNS_PER_LINE) / m_meters;
+            double scale_factor =  v_scale_ppm / radar_pixels_per_meter;  // screen pix/radar pix
+            glScaled(scale_factor, scale_factor, 1.);
+
+            m_radarbuffer.DrawGL();
+
+            glPopMatrix();
+
+            HandleBogeyCount(m_bogey_count);
         }
-        glPopMatrix();
         // Guard Zone image
         if (br_radar_state == RADAR_ON) {
             if (guardZones[0].type != GZ_OFF || guardZones[1].type != GZ_OFF) {
@@ -1527,8 +1533,10 @@ void br24radar_pi::ComputeGuardZoneAngles()
 }
 
 
-void br24radar_pi::DrawRadarImage(int max_range, wxPoint radar_center)
+void br24radar_pi::PrepareRadarImage()
 {
+    int max_range = m_meters;
+
     static unsigned int previousAngle = LINES_PER_ROTATION;
     static const double spokeWidthDeg = SCALE_RAW_TO_DEGREES(1);
     static const double spokeWidthRad = deg2rad(spokeWidthDeg); // How wide is one spoke?
@@ -1604,8 +1612,6 @@ void br24radar_pi::DrawRadarImage(int max_range, wxPoint radar_center)
 
         angleDeg = fmod((drawAngle - blobSpokesWide / 2.0 + 0.5) * spokeWidthDeg + 360.0, 360.0);
         angleRad = deg2rad(angleDeg);
-        double angleCos = cos(angleRad);
-        double angleSin = sin(angleRad);
         double r_begin = 0, r_end = 0;
 
         enum colors { BLOB_NONE, BLOB_BLUE, BLOB_GREEN, BLOB_RED };
@@ -1684,42 +1690,41 @@ void br24radar_pi::DrawRadarImage(int max_range, wxPoint radar_center)
                 // display time, first get the color in the glue byte
                 GLubyte red = 0, green = 0, blue = 0;
                 switch (previous_color) {
-                    case BLOB_RED:
-                        red = 255;
-                        break;
-                    case BLOB_GREEN:
-                        green = 255;
-                        break;
-                    case BLOB_BLUE:
-                        blue = 255;
-                        break;
-                    case BLOB_NONE:
-                        break;   // just to prevent compile warnings
+                    case BLOB_RED:    red = 255;    break;
+                    case BLOB_GREEN:  green = 255;  break;
+                    case BLOB_BLUE:   blue = 255;   break;
+                    case BLOB_NONE:   break;   // just to prevent compile warnings
                 }
-                glColor4ub(red, green, blue, alpha);    // red, blue, green
-                double heigth = r_end - r_begin;
-                draw_blob_gl(angleCos, angleSin, r_begin, arc_width, heigth);
-                drawn_blobs++;
+
+//                glColor4ub(red, green, blue, alpha);    // red, blue, green
+
+//                draw_blob_gl(angleCos, angleSin, r_begin, arc_width, heigth);
+//                drawn_blobs++;
+                m_radarbuffer.Push(red, green, blue, alpha,
+                                 angleRad, arc_width, r_begin, r_end);
+                
                 previous_color = actual_color;
                 if (actual_color != BLOB_NONE) {            // change of color, start new blob
                     r_begin = (double) radius * ((double) scan->range / (double) max_range);
                     r_end = r_begin + arc_heigth;
                 }
-                else {            // actual_color == BLOB_NONE, blank pixel, next radius
-                    continue;
-                }
             }
-
         }   // end of loop over radius
     }
+
+    m_bogey_mutex.Lock();
+    memcpy(m_bogey_count, bogey_count, sizeof bogey_count);
+    m_bogey_mutex.Unlock();
+    
+    m_radarbuffer.Finalize();
+    
     if (settings.verbose >= 2) {
         now = wxGetLocalTimeMillis();
         wxLogMessage(wxT("BR24radar_pi: %") wxTPRId64 wxT(" drawn %u skipped %u spokes with %u blobs maxAge=%") wxTPRId64
                      wxT(" bogeys %d, %d")
                      , now, drawn_spokes, skipped, drawn_blobs, max_age, bogey_count[0], bogey_count[1]);
     }
-    HandleBogeyCount(bogey_count);
-}        // end of DrawRadarImage
+}        // end of PrepareRadarImage
 
 void br24radar_pi::RenderSpectrum(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp)
 {
@@ -2841,6 +2846,10 @@ void *RadarDataReceiveThread::Entry(void)
                 }
             }
         }
+
+        // process the data into triangles
+        pPlugIn->PrepareRadarImage();
+        
     }
 
     if (rx_socket != INVALID_SOCKET) {

@@ -41,6 +41,8 @@
 
 #include "jsonreader.h"
 
+#include "BlobBuffer.h"
+
 #include "version.h"
 
 #define     MY_API_VERSION_MAJOR    1
@@ -381,6 +383,7 @@ public:
     void SetRangeMeters(long range);
 
     void ComputeGuardZoneAngles();
+    void PrepareRadarImage();
 
     radar_control_settings settings;
 
@@ -410,7 +413,6 @@ private:
     void RenderRadarOverlay(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp);
     void RenderSpectrum(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp);
     void RenderRadarBuffer(wxDC *pdc, int width, int height);
-    void DrawRadarImage(int max_range, wxPoint radar_center);
     void RenderGuardZone(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp);
     void HandleBogeyCount(int *bogey_count);
     void draw_histogram_column(int x, int y);
@@ -456,6 +458,12 @@ private:
     br_NMEA0183               m_NMEA0183;
 
     double                    llat, llon, ulat, ulon, dist_y, pix_y, v_scale_ppm;
+
+    int                       m_bogey_count[GUARD_ZONES];
+    wxMutex                   m_bogey_mutex;
+        
+    int                       m_meters;
+    BlobBuffer                m_radarbuffer;
 };
 
 class RadarDataReceiveThread: public wxThread

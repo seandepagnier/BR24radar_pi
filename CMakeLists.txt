@@ -29,6 +29,8 @@ INCLUDE("cmake/PluginConfigure.cmake")
 SET(SRC_br24radar
             src/br24radar_pi.h
             src/br24radar_pi.cpp
+            src/BlobBuffer.h
+            src/BlobBuffer.cpp
             src/br24radarcontrol.cpp
             src/GuardZoneControls.cpp
             src/GuardZoneBogey.cpp
