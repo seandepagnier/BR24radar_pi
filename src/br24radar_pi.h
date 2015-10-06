@@ -336,6 +336,7 @@ public:
     //    The required override PlugIn Methods
     bool RenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp);
     bool RenderOverlay(wxDC &dc, PlugIn_ViewPort *vp);
+    void Render(wxDC *dc, PlugIn_ViewPort *vp);
     void SetPositionFix(PlugIn_Position_Fix &pfix);
     void SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix);
     void SetPluginMessage(wxString &message_id, wxString &message_body);
@@ -410,7 +411,8 @@ private:
     void DoTick(void);
     void Select_Clutter(int req_clutter_index);
     void Select_Rejection(int req_rejection_index);
-    void RenderRadarOverlay(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp);
+    void RenderRadarOverlayDC(wxDC &dc, wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp);
+    void RenderRadarOverlayGL(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp);
     void RenderSpectrum(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp);
     void RenderRadarBuffer(wxDC *pdc, int width, int height);
     void RenderGuardZone(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp);

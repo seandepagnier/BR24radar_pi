@@ -38,7 +38,7 @@ public:
 
     void Push(unsigned char red, unsigned char green, unsigned char blue, unsigned char alpha,
               float angle, float arc_width, float r_begin, float r_end);
-    void DrawDC(wxDC &dc);
+    void DrawDC(wxDC &dc, wxPoint center, float scale);
     void DrawGL();
     void Finalize();
 

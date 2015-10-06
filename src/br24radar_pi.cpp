@@ -1273,11 +1273,7 @@ void br24radar_pi::UpdateState(void)   // -  run by RenderGLOverlay
 bool br24radar_pi::RenderOverlay(wxDC &dc, PlugIn_ViewPort *vp)
 {
     br_opengl_mode = false;
-
-    DoTick(); // update timers and watchdogs
-
-    UpdateState(); // update the toolbar
-
+    Render(&dc, vp);
     return true;
 }
 
@@ -1285,8 +1281,14 @@ bool br24radar_pi::RenderOverlay(wxDC &dc, PlugIn_ViewPort *vp)
 
 bool br24radar_pi::RenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp)
 {
-    br_refresh_busy_or_queued = true;   //  the receive thread should not queue another refresh (through refresh canvas) this when it is busy
     br_opengl_mode = true;
+    Render(NULL, vp);
+    return true;
+}
+
+void br24radar_pi::Render(wxDC *dc, PlugIn_ViewPort *vp)
+{
+    br_refresh_busy_or_queued = true;   //  the receive thread should not queue another refresh (through refresh canvas) this when it is busy
     // this is expected to be called at least once per second
     // but if we are scrolling or otherwise it can be MUCH more often!
 
@@ -1397,19 +1399,71 @@ bool br24radar_pi::RenderGLOverlay(wxGLContext *pcontext, PlugIn_ViewPort *vp)
         case DM_CHART_OVERLAY:
         case DM_CHART_BLACKOUT:
         case DM_EMULATOR:
-            RenderRadarOverlay(boat_center, v_scale_ppm, vp);
+            if(dc)
+                RenderRadarOverlayDC(*dc, boat_center, v_scale_ppm, vp);
+            else
+                RenderRadarOverlayGL(boat_center, v_scale_ppm, vp);
             break;
         case DM_SPECTRUM:
             if (br_radar_state == RADAR_ON) {
-                RenderSpectrum(center_screen, v_scale_ppm, vp);
+                if(!dc) // no spectrum without opengl
+                    RenderSpectrum(center_screen, v_scale_ppm, vp);
             }
             break;
     }
     br_refresh_busy_or_queued = false;
-    return true;
 }
 
-void br24radar_pi::RenderRadarOverlay(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp)
+void br24radar_pi::RenderRadarOverlayDC(wxDC &dc, wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp)
+{
+    if (settings.verbose >= 4) {
+        wxLogMessage(wxT("BR24radar_pi: RenderRadarOverlay lat=%g lon=%g v_scale_ppm=%g rotation=%g skew=%g scale=%f")
+                    , vp->clat
+                    , vp->clon
+                    , vp->view_scale_ppm
+                    , vp->rotation
+                    , vp->skew
+                    , vp->chart_scale
+                    );
+    }
+
+    double heading = MOD_DEGREES( rad2deg(vp->rotation)        // viewport rotation
+                                + 270.0                        // difference between compass and OpenGL rotation
+                                + settings.heading_correction  // fix any radome rotation fault
+                                - vp->skew * settings.skew_factor
+                                );
+
+    // fix this by preparing the image already rotated
+//    glRotatef(heading, 0, 0, 1);
+
+    if ((br_bpos_set && m_heading_source != HEADING_NONE) || settings.display_mode == DM_EMULATOR) {
+        if (br_range_meters > 0 && br_scanner_state == RADAR_ON) {
+            glPushMatrix();
+
+            // scaling...
+            m_meters = br_range_meters;
+            if (!m_meters) m_meters = br_auto_range_meters;
+            if (!m_meters) m_meters = 1000;
+            double radar_pixels_per_meter = ((double) RETURNS_PER_LINE) / m_meters;
+            double scale_factor =  v_scale_ppm / radar_pixels_per_meter;  // screen pix/radar pix
+
+            m_radarbuffer.DrawDC(dc, radar_center, scale_factor);
+
+            HandleBogeyCount(m_bogey_count);
+        }
+#if 0       
+        // Guard Zone image
+        if (br_radar_state == RADAR_ON) {
+            if (guardZones[0].type != GZ_OFF || guardZones[1].type != GZ_OFF) {
+                glRotatef(br_hdt - settings.heading_correction + vp->skew * settings.skew_factor, 0, 0, 1); //  Undo heading correction, and add heading to get relative zones
+                RenderGuardZone(radar_center, v_scale_ppm, vp);
+            }
+        }
+#endif
+    }
+}        // end of RenderRadarOverlayDC
+
+void br24radar_pi::RenderRadarOverlayGL(wxPoint radar_center, double v_scale_ppm, PlugIn_ViewPort *vp)
 {
     glPushAttrib(GL_COLOR_BUFFER_BIT | GL_LINE_BIT | GL_HINT_BIT);      //Save state
     if (settings.display_mode == DM_CHART_OVERLAY || settings.display_mode == DM_EMULATOR) {
@@ -1469,7 +1523,7 @@ void br24radar_pi::RenderRadarOverlay(wxPoint radar_center, double v_scale_ppm, 
     }
     glPopMatrix();
     glPopAttrib();
-}        // end of RenderRadarOverlay
+}        // end of RenderRadarOverlayGL
 
 /*
  * Precompute which angles returned from the radar are in which guard zones.
