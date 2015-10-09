@@ -19,7 +19,7 @@ configure_file(cmake/version.h.in ${PROJECT_SOURCE_DIR}/src/version.h)
 SET(PACKAGE_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}" )
 
 #SET(CMAKE_BUILD_TYPE Debug)
-#SET(CMAKE_VERBOSE_MAKEFILE ON)
+SET(CMAKE_VERBOSE_MAKEFILE ON)
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 
@@ -31,7 +31,7 @@ IF(NOT MSVC)
   ADD_DEFINITIONS( "-Wall -g -fprofile-arcs -ftest-coverage -fexceptions" )
  ELSE(PROFILING)
 #  ADD_DEFINITIONS( "-Wall -g -fexceptions" )
- ADD_DEFINITIONS( "-Wall -Wno-unused-result -g -O2 -fexceptions" )
+ ADD_DEFINITIONS( "-Wall -O3 -Wno-unused-result -g -fexceptions" )
  ENDIF(PROFILING)
 
  IF(NOT APPLE)

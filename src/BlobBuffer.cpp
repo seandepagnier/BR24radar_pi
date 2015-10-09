@@ -76,10 +76,13 @@ void BlobBuffer::DrawDC(wxDC &dc, wxPoint center, float scale)
 {
     m_mutex.Lock();
 
+    unsigned char *c = colors;
+    wxColour colour(c[0], c[1], c[2], c[3]);
+    dc.SetPen(colour);
+    dc.SetBrush(colour);
+
     for(int i=0; i<count; i++) {
         unsigned char *c = colors + i*3*4;
-        dc.SetPen(wxColour(c[0], c[1], c[2], c[3]));
-
         wxPoint points[3];
         for(int j = 0; j<3; j++) {
             points[j].x = triangles[(i*3+j)*2+0]*scale;

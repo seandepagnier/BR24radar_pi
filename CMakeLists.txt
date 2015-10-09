@@ -64,6 +64,9 @@ INCLUDE_DIRECTORIES(src)
 
 ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_br24radar} ${SRC_NMEA0183} ${SRC_JSON})
 
+# for mingw
+#-lwsock32 -lws2_32
+
 INCLUDE("cmake/PluginInstall.cmake")
 INCLUDE("cmake/PluginLocalization.cmake")
 INCLUDE("cmake/PluginPackage.cmake")

@@ -50,9 +50,12 @@
  */
 
 
-#ifdef _WINDOWS
-# include <WinSock2.h>
+#ifdef WIN32
+# include <winsock2.h>
 # include <ws2tcpip.h>
+#endif
+
+#ifdef MSVC
 # pragma comment (lib, "Ws2_32.lib")
 #endif
 
